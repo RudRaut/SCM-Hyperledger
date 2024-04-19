@@ -1,16 +1,12 @@
-<<<<<<< HEAD
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
 
-	"github.com/hyperledger/fabric-chaincode-go/shim"
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
-	protos "github.com/hyperledger/fabric-protos-go/peer"
 )
 
 //  ---------------------------- data ------------------------------------------
@@ -20,7 +16,7 @@ type SupplyChain struct {
 }
 
 type CounterNO struct {
-	Counter int `json:"Conuter"`
+	Counter int `json:"Counter"`
 }
 
 type User struct {
@@ -32,13 +28,18 @@ type User struct {
 	Password string `json:"Password"`
 }
 
-type ProductDates struct {
-	ManufactureDate string `json:"ManufactureDate"` // Date of Manufacturing the product
-	SupplyDate      string `json:"SupplyDate"`      // Supplier getting products
-	OrderDate       string `json:"OrderDate"`       // Order placed by customer
-	TransportDate   string `json:"TransportDate"`   // Product sent for transporting
-	SoldDate        string `json:"SoldDate"`
-	DeliveryDate    string `json:"DeliveryDate"` //  Product delivered to customer
+type UserInfo struct {
+	Name     string `json:"Name"`
+	UserID   string `json:"UserID"`
+	UserType string `json:"UserType"`
+	Email    string `json:"Email"`
+	Address  string `json:"Address"`
+}
+
+type ProductPos struct {
+	Date      string `json:"Date"`
+	Latitude  string `json:"Latitude"`
+	Longitude string `json:"Longitude"`
 }
 
 type Product struct {
@@ -52,101 +53,64 @@ type Product struct {
 	TransporterID  string       `json:"TransporterID"`
 	Status         string       `json:"Status"`
 	Price          float64      `json:"Price"`
-	Date           ProductDates `json:"Date"`
+	Position       []ProductPos `json:"Position"`
 }
 
-//  ---------------------------- main ------------------------------------------
-
-func main() {
-	err := shim.Start(new(SupplyChain))
-	if err != nil {
-		fmt.Printf("Error starting Simple chaincode: %s", err)
-	}
-}
-
-func (t *SupplyChain) Init(APIstub shim.ChaincodeStubInterface) protos.Response {
-	// Initializing Product Counter
-	ProductCounterBytes, _ := APIstub.GetState("ProductCounterNO")
-	if ProductCounterBytes == nil { // No value of ProductCounterbytes found, initialize a new one
-		var ProductCounter = CounterNO{Counter: 0}
-		ProductCounterBytes, _ := json.Marshal(ProductCounter)
-		err := APIstub.PutState("ProductCounterNO", ProductCounterBytes)
-		if err != nil {
-			return shim.Error(fmt.Sprintf("Failed to initiate Product Counter"))
-		}
-	}
-
-	// Initializing Order Counter
-	OrderCounterBytes, _ := APIstub.GetState("OrderCounterNO")
-	if OrderCounterBytes == nil { // No value of ProductCounterbytes found, initialize a new one
-		var OrderCounter = CounterNO{Counter: 0}
-		OrderCounterBytes, _ := json.Marshal(OrderCounter)
-		err := APIstub.PutState("OrderCounterNO", OrderCounterBytes)
-		if err != nil {
-			return shim.Error(fmt.Sprintf("Failed to initiate Product Counter"))
-		}
-	}
-
-	// Initializing User Counter
-	UserCounterBytes, _ := APIstub.GetState("ProductCounterNO")
-	if UserCounterBytes == nil { // No value of ProductCounterbytes found, initialize a new one
-		var UserCounter = CounterNO{Counter: 0}
-		UserCounterBytes, _ := json.Marshal(UserCounter)
-		err := APIstub.PutState("UserCounterNO", UserCounterBytes)
-		if err != nil {
-			return shim.Error(fmt.Sprintf("Failed to initiate Product Counter"))
-		}
-	}
-
-	return shim.Success(nil) // Successful completion of function
-}
-
-// Invoke - All functions will be invoked by this function
-func (t *SupplyChain) Invoke(APIstub shim.ChaincodeStubInterface) protos.Response {
-	function, args := APIstub.GetFunctionAndParameters()
+func (t *SupplyChain) Invoke(ctx contractapi.TransactionContextInterface) error {
+	function, args := ctx.GetStub().GetFunctionAndParameters()
 	fmt.Println("invoke is running" + function)
 
-	// Handling different functionsd
 	switch function {
-	case "initLedger":
-		//initLedger function
-		return t.initLedger(APIstub, args)
+	case "InitLedger":
+		return t.InitLedger(ctx)
 	case "signIn":
-		return t.signIn(APIstub, args)
+		return t.signIn(ctx, args)
 	case "createUser":
-		return t.createUser(APIstub, args)
+		return t.createUser(ctx, args)
 	case "createProduct":
-		return t.createProduct(APIstub, args)
+		if len(args) != 5 {
+			return fmt.Errorf("insufficient arguments expected 5 for create-product")
+		}
+		name, userID, longitude, latitude, price := args[0], args[1], args[2], args[3], args[4]
+		return t.createProduct(ctx, name, userID, longitude, latitude, price)
 	case "updateProduct":
-		return t.updateProduct(APIstub, args)
-	case "orderProduct":
-		return t.orderProduct(APIstub, args)
-	case "productDelivered":
-		return t.productDelivered(APIstub, args)
+		if len(args) != 4 {
+			return fmt.Errorf("insufficient arguments expected 4 for update-product")
+		}
+		userID, productID, name, price := args[0], args[1], args[2], args[3]
+		return t.updateProduct(ctx, userID, productID, name, price)
 	case "toSupplier":
-		return t.toSupplier(APIstub, args)
+		if len(args) != 4 {
+			return fmt.Errorf("insufficient arguments expected 4 for to-supplier")
+		}
+		productID, supplierID, longitude, latitude := args[0], args[1], args[2], args[3]
+		return t.toSupplier(ctx, productID, supplierID, longitude, latitude)
 	case "toTransporter":
-		return t.toTransporter(APIstub, args)
+		if len(args) != 4 {
+			return fmt.Errorf("insufficient arguments expected 4 for to-transporter")
+		}
+		productID, transporterID, longitude, latitude := args[0], args[1], args[2], args[3]
+		return t.toTransporter(ctx, productID, transporterID, longitude, latitude)
 	case "sellToCustomer":
-		return t.sellToCustomer(APIstub, args)
-	// case "queryAsset":
-	// 	return t.queryAsset(APIstub, args);
-	case "queryAll":
-		return t.queryAll(APIstub, args)
+		if len(args) != 3 {
+			return fmt.Errorf("insufficient arguments expected 3 for sell-to-customer")
+		}
+		productID, customerID, latitude, longitude := args[0], args[1], args[2], args[3]
+		return t.sellToCustomer(ctx, productID, customerID, latitude, longitude)
+	// Add more functions here...
 	default:
-		fmt.Println("Invalid function name:", function) // Use fmt.Println instead of console.error
-		// return nil // Or throw an error
+		return fmt.Errorf("invalid function name: %s", function)
 	}
-
-	return shim.Success(nil)
 }
+
+// //  ---------------------------- functions ------------------------------------------
 
 func getCounter(ctx contractapi.TransactionContextInterface, AssetType string) int {
 	counterAsBytes, _ := ctx.GetStub().GetState(AssetType)
 	counter := CounterNO{}
 
 	json.Unmarshal(counterAsBytes, &counter)
-	fmt.Sprintf("Counter Current Value %d of  Asset Type %s  ", counter.Counter, AssetType)
+	fmt.Printf("Counter Current Value %d of  Asset Type %s  ", counter.Counter, AssetType)
 
 	return counter.Counter
 }
@@ -161,13 +125,13 @@ func incrementCounter(ctx contractapi.TransactionContextInterface, AssetType str
 
 	err := ctx.GetStub().PutState(AssetType, counterAsBytes)
 	if err != nil {
-		fmt.Sprintf("Failed to Increment Counter")
+		fmt.Printf("Failed to Increment Counter")
 	}
 	return counter.Counter
 }
 
 // Get the TimeStamp of transaction when chaicode was executed
-func (t *SupplyChain) GetTxTime(ctx contractapi.TransactionContextInterface, AssetType string) (string, error) {
+func (t *SupplyChain) GetTxTime(ctx contractapi.TransactionContextInterface) (string, error) {
 	txTimeAsPtr, err := ctx.GetStub().GetTxTimestamp()
 	if err != nil {
 		return "Error", err
@@ -175,6 +139,7 @@ func (t *SupplyChain) GetTxTime(ctx contractapi.TransactionContextInterface, Ass
 	timeStr := time.Unix(txTimeAsPtr.Seconds, int64(txTimeAsPtr.Nanos)).String()
 	return timeStr, nil
 }
+
 func (t *SupplyChain) InitLedger(ctx contractapi.TransactionContextInterface) error {
 	// Init Manufacturer admin
 	userManufacturer := User{
@@ -188,12 +153,12 @@ func (t *SupplyChain) InitLedger(ctx contractapi.TransactionContextInterface) er
 
 	userManufacturerBytes, err := json.Marshal(userManufacturer)
 	if err != nil {
-		return fmt.Errorf("Marshal Error: %s", err.Error())
+		return fmt.Errorf("marshal error: %s", err.Error())
 	}
 
 	err = ctx.GetStub().PutState(userManufacturer.UserID, userManufacturerBytes)
 	if err != nil {
-		return fmt.Errorf("Failed to put Manufacturer to world state: %s", err.Error())
+		return fmt.Errorf("failed to put manufacturer to world state: %s", err.Error())
 	}
 
 	// Init Supplier admin
@@ -208,12 +173,12 @@ func (t *SupplyChain) InitLedger(ctx contractapi.TransactionContextInterface) er
 
 	userSupplierBytes, err := json.Marshal(userSupplier)
 	if err != nil {
-		return fmt.Errorf("Marshal Error: %s", err.Error())
+		return fmt.Errorf("marshal error: %s", err.Error())
 	}
 
 	err = ctx.GetStub().PutState(userSupplier.UserID, userSupplierBytes)
 	if err != nil {
-		return fmt.Errorf("Failed to put Supplier to world state: %s", err.Error())
+		return fmt.Errorf("failed to put supplier to world state: %s", err.Error())
 	}
 
 	// Init Transporter admin
@@ -228,12 +193,12 @@ func (t *SupplyChain) InitLedger(ctx contractapi.TransactionContextInterface) er
 
 	userTransporterBytes, err := json.Marshal(userTransporter)
 	if err != nil {
-		return fmt.Errorf("Marshal Error: %s", err.Error())
+		return fmt.Errorf("marshal error: %s", err.Error())
 	}
 
 	err = ctx.GetStub().PutState(userTransporter.UserID, userTransporterBytes)
 	if err != nil {
-		return fmt.Errorf("Failed to put Supplier to world state: %s", err.Error())
+		return fmt.Errorf("failed to put supplier to world state: %s", err.Error())
 	}
 
 	return nil
@@ -241,1285 +206,397 @@ func (t *SupplyChain) InitLedger(ctx contractapi.TransactionContextInterface) er
 }
 
 func (t *SupplyChain) signIn(ctx contractapi.TransactionContextInterface, args []string) error {
-func (t *SupplyChain) signIn(APIstub shim.ChaincodeStubInterface, args []string) protos.Response {
 	if len(args) != 2 {
-		return shim.Error("Insufficeint Arguments, Expected 2")
+		return fmt.Errorf("insufficient arguments. expected 2")
 	}
 
 	if len(args[0]) == 0 {
-		return shim.Error("User ID must be provided")
+		return fmt.Errorf("user id must be provided")
 	}
-
 	if len(args[1]) == 0 {
-		return shim.Error("Password must be provided")
+		return fmt.Errorf("password must be provided")
 	}
 
-	entityUserBytes, _ := APIstub.GetState(args[0])
-	if entityUserBytes == nil {
-		return shim.Error("Cannot Find Entity")
+	userID := args[0]
+	userBytes, err := ctx.GetStub().GetState(userID)
+	if err != nil {
+		return fmt.Errorf("error retrieving user data: %w", err)
+	}
+	if userBytes == nil {
+		return fmt.Errorf("User not found: %s", userID)
 	}
 
-	entityUser := User{}
-	json.Unmarshal(entityUserBytes, &entityUser)
-
-	if entityUser.Password != args[1] {
-		return shim.Error("Either ID or password is wrong")
+	user := User{}
+	err = json.Unmarshal(userBytes, &user)
+	if err != nil {
+		return fmt.Errorf("unmarshalling error: %w", err)
 	}
 
-	return shim.Success(entityUserBytes)
+	// Verify password
+	if user.Password != args[1] {
+		return fmt.Errorf("incorred Userid or passsword")
+	}
+
+	// No data returned, only error handling (success implied by lack of error)
+	return nil
 }
 
-func (t *SupplyChain) createUser(APIstub shim.ChaincodeStubInterface, args []string) protos.Response {
+func (t *SupplyChain) createUser(ctx contractapi.TransactionContextInterface, args []string) error {
 	if len(args) != 5 {
-		return shim.Error("Insufficeint Arguments, required 5")
+		return fmt.Errorf("insufficient arguments, expected 5")
 	}
 
 	if len(args[0]) == 0 {
-		return shim.Error("Please provide a name for the User")
+		return fmt.Errorf("provide name for User")
 	}
 
 	if len(args[1]) == 0 {
-		return shim.Error("Please provide Email to create User")
+		return fmt.Errorf("provide Email")
 	}
 
 	if len(args[2]) == 0 {
-		return shim.Error("Please specify Type of User")
+		return fmt.Errorf("please specify type of uer")
 	}
 
 	if len(args[3]) == 0 {
-		return shim.Error("Please provide non-Empty address")
+		return fmt.Errorf("please provide non-empty address")
 	}
 
 	if len(args[4]) == 0 {
-		return shim.Error("please enter valid non-empty Password")
+		return fmt.Errorf("please enter valid non-empty password")
 	}
 
-	userCounter := getCounter(APIstub, "UserCounterNO")
+	userCounter := getCounter(ctx, "UserCounterNO")
 	userCounter++
 
-	var comAsset = User{Name: args[0], UserID: "User" + strconv.Itoa(userCounter), Email: args[1], UserType: args[2], Address: args[3], Password: args[4]}
-
-	comAssetBytes, errMarshal := json.Marshal(comAsset)
-
-	if errMarshal != nil {
-		return shim.Error(fmt.Sprintf("Failed to Register User: %s", comAsset.UserID))
+	user := User{
+		Name:     args[0],
+		UserID:   "User" + strconv.Itoa(userCounter),
+		Email:    args[1],
+		UserType: args[2],
+		Address:  args[3],
+		Password: args[4],
 	}
 
-	errPut := APIstub.PutState(comAsset.UserID, comAssetBytes)
+	userAsBytes, err := json.Marshal(user)
+	if err != nil {
+		return fmt.Errorf("marshal error: %s", err.Error())
+	}
+
+	errPut := ctx.GetStub().PutState(user.UserID, userAsBytes)
 	if errPut != nil {
-		return shim.Error(fmt.Sprintf("Failed to Register User: %s", comAsset.UserID))
+		return fmt.Errorf("error storing date: %w", errPut)
 	}
 
-	incrementCounter(APIstub, "UserCounterNO")
-	fmt.Println("User Registered Successfully %v", comAsset)
+	incrementCounter(ctx, "UserCounterNO")
+	fmt.Println("Successfully created user")
 
-	return shim.Success(comAssetBytes)
+	return nil
+	//var comAsset = User{Name: args[0], UserID: "User" + strconv.Itoa(userCounter), Email: args[1], UserType: args[2], Address: args[3], Password: args[4]}
+
 }
 
-func (t *SupplyChain) createProduct(APIstub shim.ChaincodeStubInterface, args []string) protos.Response {
-	if len(args) != 3 {
-		return shim.Error("Insufficient Arguments, required 3")
-	}
+func (t *SupplyChain) createProduct(ctx contractapi.TransactionContextInterface, name string, userId string, longitude string, latitude string, price string) error {
 
-	if len(args[0]) == 0 {
-		return shim.Error("Please enter Product name to register")
-	}
-
-	if len(args[1]) == 0 {
-		return shim.Error("UserID must be provided")
-	}
-
-	if len(args[2]) == 0 {
-		return shim.Error("Please specify price for the Product")
-	}
-
-	// User details from blockchain using UserID
-	userBytes, _ := APIstub.GetState(args[1])
+	userBytes, _ := ctx.GetStub().GetState(userId)
 	if userBytes == nil {
-		return shim.Error("Can not find the User")
+		return fmt.Errorf("can not find user: %v", userId)
 	}
 
 	user := User{}
 	json.Unmarshal(userBytes, &user)
 
-	if user.UserType != "Manufacturer" || user.UserType != "manufacturer" {
-		return shim.Error("You must be a manufacturer to CreateProduct")
+	if user.UserType != "manufacturer" {
+		return fmt.Errorf("only manufacturer can create product")
 	}
 
-	// Price Conversion
-	p1, errPrice := strconv.ParseFloat(args[2], 64)
-	if errPrice != nil {
-		return shim.Error(fmt.Sprintf("Failed to convert Price %s", errPrice))
+	priceAsFloat, err := strconv.ParseFloat(price, 64)
+	if err != nil {
+		return fmt.Errorf("error converting price: %s", err.Error())
 	}
 
-	productCounter := getCounter(APIstub, "ProductCounterNO")
+	productCounter := getCounter(ctx, "ProductCounterNO")
 	productCounter++
 
-	//Creating transaction TimStamp
-	txTimeAsPtr, errTx := t.GetTxTime(APIstub)
-	if errTx != nil {
-		return shim.Error(fmt.Sprintf("Error in TimeStamp"))
+	txTimeAsPtr, err := t.GetTxTime(ctx)
+	if err != nil {
+		return fmt.Errorf("error in transaction timestamp")
 	}
 
-	dates := ProductDates{}
+	position := ProductPos{}
+	position.Date = txTimeAsPtr
+	position.Latitude = latitude
+	position.Longitude = longitude
 
-	dates.ManufactureDate = txTimeAsPtr
-
-	var comAsset = Product{ProductID: "Product" + strconv.Itoa(productCounter), OrderID: "", Name: args[0], CustomerID: "", ManufacturerID: args[1], SupplierID: "", TransporterID: "", Status: "Available", Date: dates, Price: p1}
-	comAssetAsBytes, errMarshal := json.Marshal(comAsset)
-
-	if errMarshal != nil {
-		return shim.Error(fmt.Sprintf("Marshal Error in Product: %s", errMarshal))
+	product := Product{
+		ProductID:      "Product" + strconv.Itoa(productCounter),
+		Name:           name,
+		ManufacturerID: user.UserID,
+		SupplierID:     "",
+		TransporterID:  "",
+		CustomerID:     "",
+		Status:         "Available",
+		Position:       []ProductPos{position},
+		Price:          priceAsFloat,
 	}
 
-	errPut := APIstub.PutState(comAsset.ProductID, comAssetAsBytes)
-	if errPut != nil {
-		return shim.Error(fmt.Sprintf("Failed to Create Product: %v", comAsset))
+	productAsBytes, err := json.Marshal(product)
+	if err != nil {
+		return err
 	}
-	incrementCounter(APIstub, "ProductCounterNO")
 
-	fmt.Println("Successfully created Product: %v", comAsset)
+	err = ctx.GetStub().PutState(product.ProductID, productAsBytes)
+	if err != nil {
+		return fmt.Errorf("failed to put to world state %v", err.Error())
+	}
 
-	return shim.Success(comAssetAsBytes)
+	incrementCounter(ctx, "ProductCounterNO")
+
+	return nil
 }
 
-func (t *SupplyChain) updateProduct(APIstub shim.ChaincodeStubInterface, args []string) protos.Response {
-	if len(args) != 4 {
-		return shim.Error("Insufficient Arguments, required 4")
-	}
+func (t *SupplyChain) updateProduct(ctx contractapi.TransactionContextInterface, userID string, productID string, name string, price string) error {
 
-	if len(args[0]) == 0 {
-		return shim.Error("Provide ProductID")
-	}
-
-	if len(args[1]) == 0 {
-		return shim.Error("Provide UserID")
-	}
-
-	if len(args[2]) == 0 {
-		return shim.Error("Provide Product Name")
-	}
-
-	if len(args[3]) == 0 {
-		return shim.Error("Provide updated proice for the Product")
-	}
-
-	userBytes, _ := APIstub.GetState(args[1])
+	userBytes, _ := ctx.GetStub().GetState(userID)
 	if userBytes == nil {
-		shim.Error("Can not find the User")
+		return fmt.Errorf("can not find user")
 	}
 
 	user := User{}
 	json.Unmarshal(userBytes, &user)
-
-	if user.UserType == "Customer" || user.UserType == "customer" {
-		return shim.Error("Customer cannot update Product")
+	if user.UserType == "customer" {
+		return fmt.Errorf("customer can not update product")
 	}
 
-	productBytes, _ := APIstub.GetState(args[0])
+	productBytes, err := ctx.GetStub().GetState(productID)
+
+	if err != nil {
+		return fmt.Errorf("failed to read product from world state: %s", err.Error())
+	}
+
 	if productBytes == nil {
-		return shim.Error("Can not find Product")
-	}
-
-	product := Product{}
-	json.Unmarshal(productBytes, &product)
-
-	// Price Conversion
-	p1, errPrice := strconv.ParseFloat(args[3], 64)
-	if errPrice != nil {
-		return shim.Error(fmt.Sprintf("Failed to convert Price: %s", errPrice))
-	}
-	product.Name = args[2]
-	product.Price = p1
-
-	updateProductAsBytes, errMarshal := json.Marshal(product)
-	if errMarshal != nil {
-		return shim.Error(fmt.Sprintf("Marshal Error: %s", errMarshal))
-	}
-
-	errPut := APIstub.PutState(product.ProductID, updateProductAsBytes)
-	if errPut != nil {
-		return shim.Error(fmt.Sprintf("Failed to sell to Customer: %s", product.ProductID))
-	}
-
-	fmt.Println("Successfully updated Product: %v", product.ProductID)
-	return shim.Success(updateProductAsBytes)
-}
-
-func (t *SupplyChain) orderProduct(APIstub shim.ChaincodeStubInterface, args []string) protos.Response {
-	if len(args) != 2 {
-		return shim.Error("Insufficient arguments, required 2")
-	}
-
-	if len(args[0]) == 0 {
-		return shim.Error("Please provide CustomerID")
-	}
-
-	if len(args[1]) == 0 {
-		return shim.Error("Please provide ProductID")
-	}
-	userBytes, _ := APIstub.GetState(args[0])
-
-	if userBytes == nil {
-		return shim.Error("Can not find User")
-	}
-
-	user := User{}
-	json.Unmarshal(userBytes, &user)
-	if user.UserType != "Customer" || user.UserType != "customer" {
-		return shim.Error("Only Customer can order product")
-	}
-
-	productBytes, _ := APIstub.GetState((args[1]))
-	if productBytes == nil {
-		return shim.Error("Can not find the Product")
-	}
-
-	product := Product{}
-	json.Unmarshal(productBytes, &product)
-
-	orderCounter := getCounter(APIstub, "OrderCounterNO")
-	orderCounter++
-
-	// Transaction TimeStamp
-	txTimeAsPtr, errTx := t.GetTxTime(APIstub)
-	if errTx != nil {
-		return shim.Error(fmt.Sprintf("Error in TimeStamp"))
-	}
-
-	product.OrderID = "Order" + strconv.Itoa(orderCounter)
-	product.CustomerID = user.UserID
-	product.Status = "Ordered"
-	product.Date.OrderDate = txTimeAsPtr
-	updateProductAsBytes, errMrashal := json.Marshal(product)
-	if errMrashal != nil {
-		return shim.Error(fmt.Sprintf("Marshal Error: %s", errMrashal))
-	}
-
-	incrementCounter(APIstub, "OrderCounterNO")
-
-	errPut := APIstub.PutState(product.ProductID, updateProductAsBytes)
-	if errPut != nil {
-		return shim.Error(fmt.Sprintf("Failed to place the Order: %s", product.ProductID))
-	}
-	fmt.Println("Order placed successfully: %v", product.ProductID)
-	return shim.Success(updateProductAsBytes)
-}
-
-func (t *SupplyChain) productDelivered(APIstub shim.ChaincodeStubInterface, args []string) protos.Response {
-	if len(args) != 1 {
-		return shim.Error("Insufficient Arguments, required 1")
-	}
-
-	if len(args[0]) == 0 {
-		return shim.Error("Provide ProductID")
-	}
-
-	productBytes, _ := APIstub.GetState((args[0]))
-	if productBytes == nil {
-		return shim.Error("Can not find the Product")
-	}
-
-	product := Product{}
-	json.Unmarshal(productBytes, &product)
-
-	if product.Status != "sold" || product.Status != "Sold" {
-		return shim.Error("Product is not delivered yet")
-	}
-
-	// Trnasaction Timestamp
-	txTimeAsPtr, errTx := t.GetTxTime(APIstub)
-	if errTx != nil {
-		return shim.Error(fmt.Sprintf("Error in TimeStamp"))
-	}
-
-	product.Date.DeliveryDate = txTimeAsPtr
-	product.Status = "Delivered"
-	updateProductAsBytes, errMarshal := json.Marshal(product)
-	if errMarshal != nil {
-		return shim.Error(fmt.Sprintf("Marshal Error in Product: %s", errMarshal))
-	}
-
-	errPut := APIstub.PutState(product.ProductID, updateProductAsBytes)
-	if errPut != nil {
-		return shim.Error(fmt.Sprintf("Failed to update that Product is delivered: %s", product.ProductID))
-	}
-
-	fmt.Println("Successfully delivered Product: %v", product.ProductID)
-	return shim.Success(updateProductAsBytes)
-
-}
-
-func (t *SupplyChain) toSupplier(APIstub shim.ChaincodeStubInterface, args []string) protos.Response {
-	if len(args) != 2 {
-		return shim.Error("Insufficient Arguments, required 2")
-	}
-
-	if len(args[0]) == 0 {
-		return shim.Error("Please provide ProductID")
-	}
-
-	if len(args[1]) == 0 {
-		return shim.Error("Please provide UserID")
-	}
-
-	userBytes, _ := APIstub.GetState(args[1])
-
-	if userBytes == nil {
-		return shim.Error("Can not find Supplier")
-	}
-
-	user := User{}
-	json.Unmarshal(userBytes, &user)
-
-	if user.UserType != "Supplier" || user.UserType != "Supplier" {
-		return shim.Error("User must be a Supplier")
-	}
-
-	productBytes, _ := APIstub.GetState((args[0]))
-	if productBytes == nil {
-		return shim.Error("Can not find the Product")
-	}
-
-	product := Product{}
-	json.Unmarshal(productBytes, &product)
-
-	if product.SupplierID != "" {
-		return shim.Error("Product is sent to Supplier already")
-	}
-
-	// Trnasaction Timestamp
-	txTimeAsPtr, errTx := t.GetTxTime(APIstub)
-	if errTx != nil {
-		return shim.Error(fmt.Sprintf("Error in TimeStamp"))
-	}
-
-	product.SupplierID = user.UserID
-	product.Date.SupplyDate = txTimeAsPtr
-	updateProductAsBytes, errMarshal := json.Marshal(product)
-	if errMarshal != nil {
-		return shim.Error(fmt.Sprintf("Marshal Error: %s", errMarshal))
-	}
-
-	errPut := APIstub.PutState(product.ProductID, updateProductAsBytes)
-	if errPut != nil {
-		return shim.Error(fmt.Sprintf("Failed to send to Supplier: %s", product.ProductID))
-	}
-
-	fmt.Println("Successfully sent Product for supply: %v", product.ProductID)
-	return shim.Success(updateProductAsBytes)
-
-}
-
-func (t *SupplyChain) toTransporter(APIstub shim.ChaincodeStubInterface, args []string) protos.Response {
-	if len(args) != 2 {
-		return shim.Error("Insufficient Arguments, required 2")
-	}
-
-	if len(args[0]) == 0 {
-		return shim.Error("Please provide ProductID")
-	}
-
-	if len(args[1]) == 0 {
-		return shim.Error("Please provide UserID")
-	}
-
-	userBytes, _ := APIstub.GetState(args[1])
-
-	if userBytes == nil {
-		return shim.Error("Can not find Transporter")
-	}
-
-	user := User{}
-	json.Unmarshal(userBytes, &user)
-
-	if user.UserType != "Transporter" || user.UserType != "transporter" {
-		return shim.Error("User must be a Transporter")
-	}
-
-	productBytes, _ := APIstub.GetState((args[0]))
-	if productBytes == nil {
-		return shim.Error("Can not find the Product")
+		return fmt.Errorf("can not find the product")
 	}
 
 	product := Product{}
 	json.Unmarshal(productBytes, &product)
 
 	if product.TransporterID != "" {
-		return shim.Error("Product is sent to Transporter already")
+		return fmt.Errorf("product sent to transporter. can not update price")
 	}
 
-	// Trnasaction Timestamp
-	txTimeAsPtr, errTx := t.GetTxTime(APIstub)
-	if errTx != nil {
-		return shim.Error(fmt.Sprintf("Error in TimeStamp"))
+	priceAsFloat, err := strconv.ParseFloat(price, 64)
+	if err != nil {
+		return fmt.Errorf("failed to convert price to float: %s", err.Error())
 	}
 
-	product.TransporterID = user.UserID
-	product.Date.TransportDate = txTimeAsPtr
+	product.Name = name
+	product.Price = priceAsFloat
 
-	updateProductAsBytes, errMarshal := json.Marshal(product)
-	if errMarshal != nil {
-		return shim.Error(fmt.Sprintf("Marshal Error in User %s", errMarshal))
+	updateProductAsBytes, err := json.Marshal(product)
+	if err != nil {
+		return err
 	}
 
-	errPut := APIstub.PutState(product.ProductID, updateProductAsBytes)
-	if errPut != nil {
-		return shim.Error(fmt.Sprintf("Failed to send to Transporter: %s", product.ProductID))
-	}
-
-	fmt.Println("Product successfully sent for Transporting")
-	return shim.Success(updateProductAsBytes)
+	ctx.GetStub().PutState(product.ProductID, updateProductAsBytes)
+	return nil
 
 }
 
-func (t *SupplyChain) sellToCustomer(APIstub shim.ChaincodeStubInterface, args []string) protos.Response {
-	if len(args) != 1 {
-		return shim.Error("Insufficient Arguments, required 1")
+func (t *SupplyChain) toSupplier(ctx contractapi.TransactionContextInterface, productID string, supplierID string, longitude string, latitude string) error {
+
+	userBytes, _ := ctx.GetStub().GetState(supplierID)
+
+	if userBytes == nil {
+		return fmt.Errorf("can not find Supplier")
 	}
 
-	if len(args[0]) == 0 {
-		return shim.Error("Please provide ProductID")
+	user := User{}
+	json.Unmarshal(userBytes, &user)
+
+	if user.UserType != "supplier" {
+		return fmt.Errorf("User must be a Supplier")
 	}
 
-	productBytes, _ := APIstub.GetState((args[0]))
+	productBytes, err := ctx.GetStub().GetState(productID)
+
+	if err != nil {
+		return fmt.Errorf("failed to get product from world state: %s", productID)
+	}
+
 	if productBytes == nil {
-		return shim.Error("Can not find the Product")
+		return fmt.Errorf("can not find the product")
 	}
 
 	product := Product{}
 	json.Unmarshal(productBytes, &product)
 
-	if product.OrderID == "" {
-		return shim.Error("Product is not ordered yet")
+	if product.SupplierID != "" {
+		return fmt.Errorf("Product is sent to Supplier already")
 	}
 
-	if product.CustomerID == "" {
-		return shim.Error("CustomerID should be set to sell to customers")
+	// Trnasaction Timestamp
+	txTimeAsPtr, errTx := t.GetTxTime(ctx)
+	if errTx != nil {
+		return fmt.Errorf("error getting transaction timestamp")
+	}
+
+	product.SupplierID = user.UserID
+	product.Position = append(product.Position, ProductPos{Date: txTimeAsPtr, Latitude: latitude, Longitude: longitude})
+	product.Status = "At warehouse"
+
+	updateProductAsBytes, err := json.Marshal(product)
+	if err != nil {
+		return fmt.Errorf(fmt.Sprintf("Marshal Error: %s", err))
+	}
+
+	ctx.GetStub().PutState(product.ProductID, updateProductAsBytes)
+	return nil
+}
+
+func (t *SupplyChain) toTransporter(ctx contractapi.TransactionContextInterface, productID string, transporterID string, longitude string, latitude string) error {
+
+	userBytes, _ := ctx.GetStub().GetState(transporterID)
+
+	if userBytes == nil {
+		return fmt.Errorf("can not find user")
+	}
+
+	user := User{}
+	json.Unmarshal(userBytes, &user)
+
+	if user.UserType != "transporter" {
+		return fmt.Errorf("User must be a Transporter")
+	}
+
+	productBytes, _ := ctx.GetStub().GetState(productID)
+	if productBytes == nil {
+		return fmt.Errorf("can not find the product")
+	}
+
+	product := Product{}
+	json.Unmarshal(productBytes, &product)
+
+	if product.SupplierID == "" {
+		return fmt.Errorf("product not sent to supplier yet")
+	}
+
+	if product.TransporterID != "" {
+		return fmt.Errorf("product is sent to transporter already")
+	}
+
+	// Trnasaction Timestamp
+	txTimeAsPtr, errTx := t.GetTxTime(ctx)
+	if errTx != nil {
+		return fmt.Errorf("error getting transaction timeStamp")
+	}
+
+	product.TransporterID = user.UserID
+	product.Position = append(product.Position, ProductPos{Date: txTimeAsPtr, Latitude: latitude, Longitude: longitude})
+	product.Status = "In transit"
+
+	updateProductAsBytes, errMarshal := json.Marshal(product)
+	if errMarshal != nil {
+		return fmt.Errorf("marshal error in user %s", errMarshal)
+	}
+
+	errPut := ctx.GetStub().PutState(product.ProductID, updateProductAsBytes)
+	if errPut != nil {
+		return fmt.Errorf("failed to send to transporter: %s", product.ProductID)
+	}
+
+	fmt.Println("Product successfully sent for Transporting")
+	return nil
+
+}
+
+func (t *SupplyChain) sellToCustomer(ctx contractapi.TransactionContextInterface, productID string, customerID string, longitude string, latitude string) error {
+	productBytes, _ := ctx.GetStub().GetState(productID)
+	if productBytes == nil {
+		return fmt.Errorf("can not find the product")
+	}
+
+	product := Product{}
+	json.Unmarshal(productBytes, &product)
+
+	if product.TransporterID == "" {
+		return fmt.Errorf("Product not sent to transporter yet")
+	}
+	if product.CustomerID != "" {
+		return fmt.Errorf("Product already sold")
 	}
 
 	// Transaction Timestamp
-	txTimeAsPtr, errTx := t.GetTxTime(APIstub)
+	txTimeAsPtr, errTx := t.GetTxTime(ctx)
 	if errTx != nil {
-		return shim.Error(fmt.Sprintf("Error in TimeStamp"))
+		return fmt.Errorf("error in timestamp")
 	}
 
-	product.Date.SoldDate = txTimeAsPtr
+	product.CustomerID = customerID
+	product.Position = append(product.Position, ProductPos{Date: txTimeAsPtr, Latitude: latitude, Longitude: longitude})
 	product.Status = "Sold"
 
 	updateProductAsBytes, errMarshal := json.Marshal(product)
 	if errMarshal != nil {
-		return shim.Error(fmt.Sprintf("Marshal Error in User %s", errMarshal))
+		return fmt.Errorf("marshal error in user %s", errMarshal)
 	}
 
-	errPut := APIstub.PutState(product.ProductID, updateProductAsBytes)
-	if errPut != nil {
-		return shim.Error(fmt.Sprintf("Failed to update that Product is delivered: %s", product.ProductID))
-	}
-
-	fmt.Println("Successfully sold Product to Customer: %v", product.ProductID)
-	return shim.Success(updateProductAsBytes)
+	ctx.GetStub().PutState(product.ProductID, updateProductAsBytes)
+	return nil
 }
 
-func (t *SupplyChain) queryAsset(APIstub shim.ChaincodeStub, args []string) protos.Response {
-	if len(args) != 1 {
-		return shim.Error("Insufficient Arguments, required 1")
-	}
-
-	productAsBytes, _ := APIstub.GetState(args[0])
-	return shim.Success(productAsBytes)
-}
-
-func (t *SupplyChain) queryAll(APIstub shim.ChaincodeStubInterface, args []string) protos.Response {
-	if len(args) != 1 {
-		return shim.Error("Insufficient Arguments, required 1")
-	}
-
-	if len(args[0]) == 0 {
-		return shim.Error("Please provide Asset Type")
-	}
-
-	assetType := args[0]
-	assetCounter := getCounter(APIstub, assetType+"CounterNO")
-
-	startKey := assetType + "1"
-	endKey := assetType + strconv.Itoa(assetCounter+1)
-
-	resultsIterator, err := APIstub.GetStateByRange(startKey, endKey)
-
+func (t *SupplyChain) QueryProduct(ctx contractapi.TransactionContextInterface, productId string) (*Product, error) {
+	productAsBytes, err := ctx.GetStub().GetState(productId)
 	if err != nil {
-		return shim.Error(err.Error())
+		return nil, fmt.Errorf("failed to read from world state: %s", err.Error())
 	}
+	if productAsBytes == nil {
+		return nil, fmt.Errorf("Product %s does not exist", productId)
+	}
+	product := new(Product)
+	err = json.Unmarshal(productAsBytes, &product)
+	if err != nil {
+		return nil, err
+	}
+	return product, nil
+}
 
+func (t *SupplyChain) QueryAllProducts(ctx contractapi.TransactionContextInterface) ([]*Product, error) {
+	startKey := "Product1"
+	endKey := "Product999"
+
+	resultsIterator, err := ctx.GetStub().GetStateByRange(startKey, endKey)
+	if err != nil {
+		return nil, err
+	}
 	defer resultsIterator.Close()
 
-	var buffer bytes.Buffer
-	buffer.WriteString("[")
-
-	bArrayMemberAlreadyWritten := false
+	results := []*Product{}
 	for resultsIterator.HasNext() {
 		queryResponse, err := resultsIterator.Next()
 		if err != nil {
-			return shim.Error(err.Error())
+			return nil, err
 		}
-		if bArrayMemberAlreadyWritten == true {
-			buffer.WriteString(",")
-		}
-		buffer.WriteString("{\"Key\":")
-		buffer.WriteString("\"")
-		buffer.WriteString(queryResponse.Key)
-		buffer.WriteString("\"")
-		buffer.WriteString(", \"Record\":")
-		buffer.WriteString(string(queryResponse.Value))
-		buffer.WriteString("}")
-		bArrayMemberAlreadyWritten = true
+
+		product := new(Product)
+		_ = json.Unmarshal(queryResponse.Value, product)
+		results = append(results, product)
 	}
 
-	buffer.WriteString("]")
-	fmt.Println("- queryAllAssets:\n%s\n", buffer.String())
-	return shim.Success(buffer.Bytes())
-
-}
-=======
-package main
-
-import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"strconv"
-	"time"
-
-	"github.com/hyperledger/fabric-chaincode-go/shim"
-	"github.com/hyperledger/fabric-contract-api-go/contractapi"
-	protos "github.com/hyperledger/fabric-protos-go/peer"
-)
-
-//  ---------------------------- data ------------------------------------------
-
-type SupplyChain struct {
-	contractapi.SystemContract
-}
-
-type CounterNO struct {
-	Counter int `json:"Conuter"`
-}
-
-type User struct {
-	Name     string `json:"Name"`
-	UserID   string `json:"UserID"`
-	UserType string `json:"UserType"`
-	Email    string `json:"Email"`
-	Address  string `json:"Address"`
-	Password string `json:"Password"`
-}
-
-type ProductDates struct {
-
-	// Try Creating date struct {DD:MM:YYYY} and use that instead of string (later)
-
-	ManufactureDate string `json:"ManufactureDate"` // Date of Manufacturing the product
-	SupplyDate      string `json:"SupplyDate"`      // Supplier getting products
-	OrderDate       string `json:"OrderDate"`       // Order placed by customer
-	TransportDate   string `json:"TransportDate"`   // Product sent for transporting
-	SoldDate        string `json:"SoldDate"`
-	DeliveryDate    string `json:"DeliveryDate"` //  Product delivered to customer
-}
-
-type Product struct {
-	// Product Data
-	ProductID      string       `json:"ProductID"`
-	OrderID        string       `json:"OrderID"`
-	Name           string       `json:"Name"`
-	CustomerID     string       `json:"CustomerID"`
-	ManufacturerID string       `json:"ManufacturerID"`
-	SupplierID     string       `json:"SupplierID"`
-	TransporterID  string       `json:"TransporterID"`
-	Status         string       `json:"Status"`
-	Price          float64      `json:"Price"`
-	Date           ProductDates `json:"Date"`
+	return results, nil
 }
 
 //  ---------------------------- main ------------------------------------------
 
 func main() {
-	err := shim.Start(new(SupplyChain))
+	chaincode, err := contractapi.NewChaincode(new(SupplyChain))
 	if err != nil {
-		fmt.Printf("Error starting Simple chaincode: %s", err)
-	}
-}
-
-func (t *SupplyChain) Init(APIstub shim.ChaincodeStubInterface) protos.Response {
-	// Initializing Product Counter
-	ProductCounterBytes, _ := APIstub.GetState("ProductCounterNO")
-	if ProductCounterBytes == nil { // No value of ProductCounterbytes found, initialize a new one
-		var ProductCounter = CounterNO{Counter: 0}
-		ProductCounterBytes, _ := json.Marshal(ProductCounter)
-		err := APIstub.PutState("ProductCounterNO", ProductCounterBytes)
-		if err != nil {
-			return shim.Error(fmt.Sprintf("Failed to initiate Product Counter"))
-		}
+		fmt.Printf("Error creating chaincode: %s", err.Error())
+		return
 	}
 
-	// Initializing Order Counter
-	OrderCounterBytes, _ := APIstub.GetState("OrderCounterNO")
-	if OrderCounterBytes == nil { // No value of ProductCounterbytes found, initialize a new one
-		var OrderCounter = CounterNO{Counter: 0}
-		OrderCounterBytes, _ := json.Marshal(OrderCounter)
-		err := APIstub.PutState("OrderCounterNO", OrderCounterBytes)
-		if err != nil {
-			return shim.Error(fmt.Sprintf("Failed to initiate Product Counter"))
-		}
+	if err := chaincode.Start(); err != nil {
+		fmt.Printf("Error starting supply chain chaincode: %s", err.Error())
 	}
-
-	// Initializing User Counter
-	UserCounterBytes, _ := APIstub.GetState("ProductCounterNO")
-	if UserCounterBytes == nil { // No value of ProductCounterbytes found, initialize a new one
-		var UserCounter = CounterNO{Counter: 0}
-		UserCounterBytes, _ := json.Marshal(UserCounter)
-		err := APIstub.PutState("UserCounterNO", UserCounterBytes)
-		if err != nil {
-			return shim.Error(fmt.Sprintf("Failed to initiate Product Counter"))
-		}
-	}
-
-	return shim.Success(nil) // Successful completion of function
-}
-
-// Invoke - All functions will be invoked by this function
-func (t *SupplyChain) Invoke(APIstub shim.ChaincodeStubInterface) protos.Response {
-	function, args := APIstub.GetFunctionAndParameters()
-	fmt.Println("invoke is running" + function)
-
-	// Handling different functionsd
-	switch function {
-	case "initLedger":
-		//initLedger function
-		return t.initLedger(APIstub, args)
-	case "signIn":
-		return t.signIn(APIstub, args)
-	case "createUser":
-		return t.createUser(APIstub, args)
-	case "createProduct":
-		return t.createProduct(APIstub, args)
-	case "updateProduct":
-		return t.updateProduct(APIstub, args)
-	case "orderProduct":
-		return t.orderProduct(APIstub, args)
-	case "productDelivered":
-		return t.productDelivered(APIstub, args)
-	case "toSupplier":
-		return t.toSupplier(APIstub, args)
-	case "toTransporter":
-		return t.toTransporter(APIstub, args)
-	case "sellToCustomer":
-		return t.sellToCustomer(APIstub, args)
-	// case "queryAsset":
-	// 	return t.queryAsset(APIstub, args);
-	case "queryAll":
-		return t.queryAll(APIstub, args)
-	default:
-		fmt.Println("Invalid function name:", function) // Use fmt.Println instead of console.error
-		// return nil // Or throw an error
-	}
-
-	return shim.Success(nil)
-}
-
-func getCounter(APIstub shim.ChaincodeStubInterface, AssetType string) int {
-	counterAsBytes, _ := APIstub.GetState(AssetType)
-	counterAsset := CounterNO{}
-
-	json.Unmarshal(counterAsBytes, &counterAsset)
-	fmt.Sprintf("Counter Current Value %d of  Asset Type %s  ", counterAsset.Counter, AssetType)
-
-	return counterAsset.Counter
-}
-
-func incrementCounter(APIstub shim.ChaincodeStubInterface, AssetType string) int {
-	counterAsBytes, _ := APIstub.GetState(AssetType)
-	counterAsset := CounterNO{}
-
-	json.Unmarshal(counterAsBytes, &counterAsset)
-	counterAsset.Counter++
-	counterAsBytes, _ = json.Marshal(counterAsset)
-
-	err := APIstub.PutState(AssetType, counterAsBytes)
-	if err != nil {
-		fmt.Sprintf("Failed to Increment Counter")
-	}
-
-	fmt.Println("Increment Successful for %v", counterAsset)
-
-	return counterAsset.Counter
-}
-
-// Get the TimeStamp of transaction when chaicode was executed
-func (t *SupplyChain) GetTxTime(APIstub shim.ChaincodeStubInterface) (string, error) {
-	txTimeAsPtr, err := APIstub.GetTxTimestamp()
-	if err != nil {
-		fmt.Printf("Error returning TimeStamp \n")
-		return "Error", err
-	}
-	fmt.Printf("\t returned value from APIstub: %v \n", txTimeAsPtr)
-	timeStr := time.Unix(txTimeAsPtr.Seconds, int64(txTimeAsPtr.Nanos)).String()
-
-	return timeStr, nil
-}
-
-func (t *SupplyChain) initLedger(APIstub shim.ChaincodeStubInterface, args []string) protos.Response {
-	entityUser := User{Name: "admin", UserID: "admin", Email: "email@scm.com", UserType: "admin", Address: "Pune", Password: "adminpw"}
-	entityUserAsBytes, errMarshal := json.Marshal(entityUser)
-	if errMarshal != nil {
-		return shim.Error(fmt.Sprintf("Marshal Error in User %s", errMarshal))
-	}
-
-	errPut := APIstub.PutState(entityUser.UserID, entityUserAsBytes)
-	if errPut != nil {
-		return shim.Error(fmt.Sprintf("Failed to create entity Asset: %s", entityUser.UserID))
-	}
-
-	fmt.Println("Added User", entityUser)
-	return shim.Success(nil)
-}
-
-func (t *SupplyChain) signIn(APIstub shim.ChaincodeStubInterface, args []string) protos.Response {
-	if len(args) != 2 {
-		return shim.Error("Insufficeint Arguments, Expected 2")
-	}
-
-	if len(args[0]) == 0 {
-		return shim.Error("User ID must be provided")
-	}
-
-	if len(args[1]) == 0 {
-		return shim.Error("Password must be provided")
-	}
-
-	entityUserBytes, _ := APIstub.GetState(args[0])
-	if entityUserBytes == nil {
-		return shim.Error("Cannot Find Entity")
-	}
-
-	entityUser := User{}
-	json.Unmarshal(entityUserBytes, &entityUser)
-
-	if entityUser.Password != args[1] {
-		return shim.Error("Either ID or password is wrong")
-	}
-
-	return shim.Success(entityUserBytes)
-}
-
-func (t *SupplyChain) createUser(APIstub shim.ChaincodeStubInterface, args []string) protos.Response {
-	if len(args) != 5 {
-		return shim.Error("Insufficeint Arguments, required 5")
-	}
-
-	if len(args[0]) == 0 {
-		return shim.Error("Please provide a name for the User")
-	}
-
-	if len(args[1]) == 0 {
-		return shim.Error("Please provide Email to create User")
-	}
-
-	if len(args[2]) == 0 {
-		return shim.Error("Please specify Type of User")
-	}
-
-	if len(args[3]) == 0 {
-		return shim.Error("Please provide non-Empty address")
-	}
-
-	if len(args[4]) == 0 {
-		return shim.Error("please enter valid non-empty Password")
-	}
-
-	userCounter := getCounter(APIstub, "UserCounterNO")
-	userCounter++
-
-	var comAsset = User{Name: args[0], UserID: "User" + strconv.Itoa(userCounter), Email: args[1], UserType: args[2], Address: args[3], Password: args[4]}
-
-	comAssetBytes, errMarshal := json.Marshal(comAsset)
-
-	if errMarshal != nil {
-		return shim.Error(fmt.Sprintf("Failed to Register User: %s", comAsset.UserID))
-	}
-
-	errPut := APIstub.PutState(comAsset.UserID, comAssetBytes)
-	if errPut != nil {
-		return shim.Error(fmt.Sprintf("Failed to Register User: %s", comAsset.UserID))
-	}
-
-	incrementCounter(APIstub, "UserCounterNO")
-	fmt.Println("User Registered Successfully %v", comAsset)
-
-	return shim.Success(comAssetBytes)
-}
-
-func (t *SupplyChain) createProduct(APIstub shim.ChaincodeStubInterface, args []string) protos.Response {
-	if len(args) != 3 {
-		return shim.Error("Insufficient Arguments, required 3")
-	}
-
-	if len(args[0]) == 0 {
-		return shim.Error("Please enter Product name to register")
-	}
-
-	if len(args[1]) == 0 {
-		return shim.Error("UserID must be provided")
-	}
-
-	if len(args[2]) == 0 {
-		return shim.Error("Please specify price for the Product")
-	}
-
-	// User details from blockchain using UserID
-	userBytes, _ := APIstub.GetState(args[1])
-	if userBytes == nil {
-		return shim.Error("Can not find the User")
-	}
-
-	user := User{}
-	json.Unmarshal(userBytes, &user)
-
-	if user.UserType != "Manufacturer" || user.UserType != "manufacturer" {
-		return shim.Error("You must be a manufacturer to CreateProduct")
-	}
-
-	// Price Conversion
-	p1, errPrice := strconv.ParseFloat(args[2], 64)
-	if errPrice != nil {
-		return shim.Error(fmt.Sprintf("Failed to convert Price %s", errPrice))
-	}
-
-	productCounter := getCounter(APIstub, "ProductCounterNO")
-	productCounter++
-
-	//Creating transaction TimStamp
-	txTimeAsPtr, errTx := t.GetTxTime(APIstub)
-	if errTx != nil {
-		return shim.Error(fmt.Sprintf("Error in TimeStamp"))
-	}
-
-	dates := ProductDates{}
-
-	dates.ManufactureDate = txTimeAsPtr
-
-	var comAsset = Product{ProductID: "Product" + strconv.Itoa(productCounter), OrderID: "", Name: args[0], CustomerID: "", ManufacturerID: args[1], SupplierID: "", TransporterID: "", Status: "Available", Date: dates, Price: p1}
-	comAssetAsBytes, errMarshal := json.Marshal(comAsset)
-
-	if errMarshal != nil {
-		return shim.Error(fmt.Sprintf("Marshal Error in Product: %s", errMarshal))
-	}
-
-	errPut := APIstub.PutState(comAsset.ProductID, comAssetAsBytes)
-	if errPut != nil {
-		return shim.Error(fmt.Sprintf("Failed to Create Product: %v", comAsset))
-	}
-	incrementCounter(APIstub, "ProductCounterNO")
-
-	fmt.Println("Successfully created Product: %v", comAsset)
-
-	return shim.Success(comAssetAsBytes)
-}
-
-func (t *SupplyChain) updateProduct(APIstub shim.ChaincodeStubInterface, args []string) protos.Response {
-	if len(args) != 4 {
-		return shim.Error("Insufficient Arguments, required 4")
-	}
-
-	if len(args[0]) == 0 {
-		return shim.Error("Provide ProductID")
-	}
-
-	if len(args[1]) == 0 {
-		return shim.Error("Provide UserID")
-	}
-
-	if len(args[2]) == 0 {
-		return shim.Error("Provide Product Name")
-	}
-
-	if len(args[3]) == 0 {
-		return shim.Error("Provide updated proice for the Product")
-	}
-
-	userBytes, _ := APIstub.GetState(args[1])
-	if userBytes == nil {
-		shim.Error("Can not find the User")
-	}
-
-	user := User{}
-	json.Unmarshal(userBytes, &user)
-
-	if user.UserType == "Customer" || user.UserType == "customer" {
-		return shim.Error("Customer cannot update Product")
-	}
-
-	productBytes, _ := APIstub.GetState(args[0])
-	if productBytes == nil {
-		return shim.Error("Can not find Product")
-	}
-
-	product := Product{}
-	json.Unmarshal(productBytes, &product)
-
-	// Price Conversion
-	p1, errPrice := strconv.ParseFloat(args[3], 64)
-	if errPrice != nil {
-		return shim.Error(fmt.Sprintf("Failed to convert Price: %s", errPrice))
-	}
-	product.Name = args[2]
-	product.Price = p1
-
-	updateProductAsBytes, errMarshal := json.Marshal(product)
-	if errMarshal != nil {
-		return shim.Error(fmt.Sprintf("Marshal Error: %s", errMarshal))
-	}
-
-	errPut := APIstub.PutState(product.ProductID, updateProductAsBytes)
-	if errPut != nil {
-		return shim.Error(fmt.Sprintf("Failed to sell to Customer: %s", product.ProductID))
-	}
-
-	fmt.Println("Successfully updated Product: %v", product.ProductID)
-	return shim.Success(updateProductAsBytes)
-}
-
-func (t *SupplyChain) orderProduct(APIstub shim.ChaincodeStubInterface, args []string) protos.Response {
-	if len(args) != 2 {
-		return shim.Error("Insufficient arguments, required 2")
-	}
-
-	if len(args[0]) == 0 {
-		return shim.Error("Please provide CustomerID")
-	}
-
-	if len(args[1]) == 0 {
-		return shim.Error("Please provide ProductID")
-	}
-	userBytes, _ := APIstub.GetState(args[0])
-
-	if userBytes == nil {
-		return shim.Error("Can not find User")
-	}
-
-	user := User{}
-	json.Unmarshal(userBytes, &user)
-	if user.UserType != "Customer" || user.UserType != "customer" {
-		return shim.Error("Only Customer can order product")
-	}
-
-	productBytes, _ := APIstub.GetState((args[1]))
-	if productBytes == nil {
-		return shim.Error("Can not find the Product")
-	}
-
-	product := Product{}
-	json.Unmarshal(productBytes, &product)
-
-	orderCounter := getCounter(APIstub, "OrderCounterNO")
-	orderCounter++
-
-	// Transaction TimeStamp
-	txTimeAsPtr, errTx := t.GetTxTime(APIstub)
-	if errTx != nil {
-		return shim.Error(fmt.Sprintf("Error in TimeStamp"))
-	}
-
-	product.OrderID = "Order" + strconv.Itoa(orderCounter)
-	product.CustomerID = user.UserID
-	product.Status = "Ordered"
-	product.Date.OrderDate = txTimeAsPtr
-	updateProductAsBytes, errMrashal := json.Marshal(product)
-	if errMrashal != nil {
-		return shim.Error(fmt.Sprintf("Marshal Error: %s", errMrashal))
-	}
-
-	incrementCounter(APIstub, "OrderCounterNO")
-
-	errPut := APIstub.PutState(product.ProductID, updateProductAsBytes)
-	if errPut != nil {
-		return shim.Error(fmt.Sprintf("Failed to place the Order: %s", product.ProductID))
-	}
-	fmt.Println("Order placed successfully: %v", product.ProductID)
-	return shim.Success(updateProductAsBytes)
-}
-
-func (t *SupplyChain) productDelivered(APIstub shim.ChaincodeStubInterface, args []string) protos.Response {
-	if len(args) != 1 {
-		return shim.Error("Insufficient Arguments, required 1")
-	}
-
-	if len(args[0]) == 0 {
-		return shim.Error("Provide ProductID")
-	}
-
-	productBytes, _ := APIstub.GetState((args[0]))
-	if productBytes == nil {
-		return shim.Error("Can not find the Product")
-	}
-
-	product := Product{}
-	json.Unmarshal(productBytes, &product)
-
-	if product.Status != "sold" || product.Status != "Sold" {
-		return shim.Error("Product is not delivered yet")
-	}
-
-	// Trnasaction Timestamp
-	txTimeAsPtr, errTx := t.GetTxTime(APIstub)
-	if errTx != nil {
-		return shim.Error(fmt.Sprintf("Error in TimeStamp"))
-	}
-
-	product.Date.DeliveryDate = txTimeAsPtr
-	product.Status = "Delivered"
-	updateProductAsBytes, errMarshal := json.Marshal(product)
-	if errMarshal != nil {
-		return shim.Error(fmt.Sprintf("Marshal Error in Product: %s", errMarshal))
-	}
-
-	errPut := APIstub.PutState(product.ProductID, updateProductAsBytes)
-	if errPut != nil {
-		return shim.Error(fmt.Sprintf("Failed to update that Product is delivered: %s", product.ProductID))
-	}
-
-	fmt.Println("Successfully delivered Product: %v", product.ProductID)
-	return shim.Success(updateProductAsBytes)
 
 }
-
-func (t *SupplyChain) toSupplier(APIstub shim.ChaincodeStubInterface, args []string) protos.Response {
-	if len(args) != 2 {
-		return shim.Error("Insufficient Arguments, required 2")
-	}
-
-	if len(args[0]) == 0 {
-		return shim.Error("Please provide ProductID")
-	}
-
-	if len(args[1]) == 0 {
-		return shim.Error("Please provide UserID")
-	}
-
-	userBytes, _ := APIstub.GetState(args[1])
-
-	if userBytes == nil {
-		return shim.Error("Can not find Supplier")
-	}
-
-	user := User{}
-	json.Unmarshal(userBytes, &user)
-
-	if user.UserType != "Supplier" || user.UserType != "Supplier" {
-		return shim.Error("User must be a Supplier")
-	}
-
-	productBytes, _ := APIstub.GetState((args[0]))
-	if productBytes == nil {
-		return shim.Error("Can not find the Product")
-	}
-
-	product := Product{}
-	json.Unmarshal(productBytes, &product)
-
-	if product.SupplierID != "" {
-		return shim.Error("Product is sent to Supplier already")
-	}
-
-	// Trnasaction Timestamp
-	txTimeAsPtr, errTx := t.GetTxTime(APIstub)
-	if errTx != nil {
-		return shim.Error(fmt.Sprintf("Error in TimeStamp"))
-	}
-
-	product.SupplierID = user.UserID
-	product.Date.SupplyDate = txTimeAsPtr
-	updateProductAsBytes, errMarshal := json.Marshal(product)
-	if errMarshal != nil {
-		return shim.Error(fmt.Sprintf("Marshal Error: %s", errMarshal))
-	}
-
-	errPut := APIstub.PutState(product.ProductID, updateProductAsBytes)
-	if errPut != nil {
-		return shim.Error(fmt.Sprintf("Failed to send to Supplier: %s", product.ProductID))
-	}
-
-	fmt.Println("Successfully sent Product for supply: %v", product.ProductID)
-	return shim.Success(updateProductAsBytes)
-
-}
-
-func (t *SupplyChain) toTransporter(APIstub shim.ChaincodeStubInterface, args []string) protos.Response {
-	if len(args) != 2 {
-		return shim.Error("Insufficient Arguments, required 2")
-	}
-
-	if len(args[0]) == 0 {
-		return shim.Error("Please provide ProductID")
-	}
-
-	if len(args[1]) == 0 {
-		return shim.Error("Please provide UserID")
-	}
-
-	userBytes, _ := APIstub.GetState(args[1])
-
-	if userBytes == nil {
-		return shim.Error("Can not find Transporter")
-	}
-
-	user := User{}
-	json.Unmarshal(userBytes, &user)
-
-	if user.UserType != "Transporter" || user.UserType != "transporter" {
-		return shim.Error("User must be a Transporter")
-	}
-
-	productBytes, _ := APIstub.GetState((args[0]))
-	if productBytes == nil {
-		return shim.Error("Can not find the Product")
-	}
-
-	product := Product{}
-	json.Unmarshal(productBytes, &product)
-
-	if product.TransporterID != "" {
-		return shim.Error("Product is sent to Transporter already")
-	}
-
-	// Trnasaction Timestamp
-	txTimeAsPtr, errTx := t.GetTxTime(APIstub)
-	if errTx != nil {
-		return shim.Error(fmt.Sprintf("Error in TimeStamp"))
-	}
-
-	product.TransporterID = user.UserID
-	product.Date.TransportDate = txTimeAsPtr
-
-	updateProductAsBytes, errMarshal := json.Marshal(product)
-	if errMarshal != nil {
-		return shim.Error(fmt.Sprintf("Marshal Error in User %s", errMarshal))
-	}
-
-	errPut := APIstub.PutState(product.ProductID, updateProductAsBytes)
-	if errPut != nil {
-		return shim.Error(fmt.Sprintf("Failed to send to Transporter: %s", product.ProductID))
-	}
-
-	fmt.Println("Product successfully sent for Transporting")
-	return shim.Success(updateProductAsBytes)
-
-}
-
-func (t *SupplyChain) sellToCustomer(APIstub shim.ChaincodeStubInterface, args []string) protos.Response {
-	if len(args) != 1 {
-		return shim.Error("Insufficient Arguments, required 1")
-	}
-
-	if len(args[0]) == 0 {
-		return shim.Error("Please provide ProductID")
-	}
-
-	productBytes, _ := APIstub.GetState((args[0]))
-	if productBytes == nil {
-		return shim.Error("Can not find the Product")
-	}
-
-	product := Product{}
-	json.Unmarshal(productBytes, &product)
-
-	if product.OrderID == "" {
-		return shim.Error("Product is not ordered yet")
-	}
-
-	if product.CustomerID == "" {
-		return shim.Error("CustomerID should be set to sell to customers")
-	}
-
-	// Transaction Timestamp
-	txTimeAsPtr, errTx := t.GetTxTime(APIstub)
-	if errTx != nil {
-		return shim.Error(fmt.Sprintf("Error in TimeStamp"))
-	}
-
-	product.Date.SoldDate = txTimeAsPtr
-	product.Status = "Sold"
-
-	updateProductAsBytes, errMarshal := json.Marshal(product)
-	if errMarshal != nil {
-		return shim.Error(fmt.Sprintf("Marshal Error in User %s", errMarshal))
-	}
-
-	errPut := APIstub.PutState(product.ProductID, updateProductAsBytes)
-	if errPut != nil {
-		return shim.Error(fmt.Sprintf("Failed to update that Product is delivered: %s", product.ProductID))
-	}
-
-	fmt.Println("Successfully sold Product to Customer: %v", product.ProductID)
-	return shim.Success(updateProductAsBytes)
-}
-
-func (t *SupplyChain) queryAsset(APIstub shim.ChaincodeStub, args []string) protos.Response {
-	if len(args) != 1 {
-		return shim.Error("Insufficient Arguments, required 1")
-	}
-
-	productAsBytes, _ := APIstub.GetState(args[0])
-	return shim.Success(productAsBytes)
-}
-
-func (t *SupplyChain) queryAll(APIstub shim.ChaincodeStubInterface, args []string) protos.Response {
-	if len(args) != 1 {
-		return shim.Error("Insufficient Arguments, required 1")
-	}
-
-	if len(args[0]) == 0 {
-		return shim.Error("Please provide Asset Type")
-	}
-
-	assetType := args[0]
-	assetCounter := getCounter(APIstub, assetType+"CounterNO")
-
-	startKey := assetType + "1"
-	endKey := assetType + strconv.Itoa(assetCounter+1)
-
-	resultsIterator, err := APIstub.GetStateByRange(startKey, endKey)
-
-	if err != nil {
-		return shim.Error(err.Error())
-	}
-
-	defer resultsIterator.Close()
-
-	var buffer bytes.Buffer
-	buffer.WriteString("[")
-
-	bArrayMemberAlreadyWritten := false
-	for resultsIterator.HasNext() {
-		queryResponse, err := resultsIterator.Next()
-		if err != nil {
-			return shim.Error(err.Error())
-		}
-		if bArrayMemberAlreadyWritten == true {
-			buffer.WriteString(",")
-		}
-		buffer.WriteString("{\"Key\":")
-		buffer.WriteString("\"")
-		buffer.WriteString(queryResponse.Key)
-		buffer.WriteString("\"")
-		buffer.WriteString(", \"Record\":")
-		buffer.WriteString(string(queryResponse.Value))
-		buffer.WriteString("}")
-		bArrayMemberAlreadyWritten = true
-	}
-
-	buffer.WriteString("]")
-	fmt.Println("- queryAllAssets:\n%s\n", buffer.String())
-	return shim.Success(buffer.Bytes())
-
-}
->>>>>>> bef90560f02b21d09f3b73cc1f11e79b71c5b78e
