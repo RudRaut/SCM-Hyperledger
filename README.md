@@ -19,4 +19,11 @@ This chaincode is developed for building a supply chain management application u
 - Init
 - Invoke
 
+# **Changes**
+Initially, chaincode was implemented using the ShimAPI. Chnaged it to ContractAPI. 
   
+# **Functions Updated**:
+InitLedger and Sign along with some helper functions
+
+# **NOTE**:
+There will be errors in the chaincode not all of the functions are updated to use the ContractAPI.
