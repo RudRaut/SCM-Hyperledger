@@ -1,4 +1,4 @@
-## **Supply-chain-Management
+## **Supply-chain-Management**
 In the traditional supply-chain system, stakeholders face credibility, transperancy and quality issues. Blockchain based supply-chain-management system improves efficiency, transparency, and traceability of supply chain processes.This application gives access to real-time, tamper-proof data about products to all the stakeholders. 
 
 
