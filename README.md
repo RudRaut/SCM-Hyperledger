@@ -1,5 +1,9 @@
-# **Chaincode**
+## **Supply-chain-Management
+In the traditional supply-chain system, stakeholders face credibility, transperancy and quality issues. Blockchain based supply-chain-management system improves efficiency, transparency, and traceability of supply chain processes.This application gives access to real-time, tamper-proof data about products to all the stakeholders. 
 
+
+
+# **Chaincode**
 This repository contains chaincode for supply chain management system using Hyperledger-Fabric 
 
 # **Objective**:
