@@ -131,7 +131,7 @@ func incrementCounter(ctx contractapi.TransactionContextInterface, AssetType str
 }
 
 // Get the TimeStamp of transaction when chaicode was executed
-func (t *SupplyChain) GetTxTime(ctx contractapi.TransactionContextInterface) (string, error) {
+func (t *SupplyChain) GetTxTimestamp(ctx contractapi.TransactionContextInterface) (string, error) {
 	txTimeAsPtr, err := ctx.GetStub().GetTxTimestamp()
 	if err != nil {
 		return "Error", err
@@ -292,7 +292,6 @@ func (t *SupplyChain) createUser(ctx contractapi.TransactionContextInterface, ar
 	fmt.Println("Successfully created user")
 
 	return nil
-	//var comAsset = User{Name: args[0], UserID: "User" + strconv.Itoa(userCounter), Email: args[1], UserType: args[2], Address: args[3], Password: args[4]}
 
 }
 
@@ -318,7 +317,7 @@ func (t *SupplyChain) createProduct(ctx contractapi.TransactionContextInterface,
 	productCounter := getCounter(ctx, "ProductCounterNO")
 	productCounter++
 
-	txTimeAsPtr, err := t.GetTxTime(ctx)
+	txTimeAsPtr, err := t.GetTxTimestamp(ctx)
 	if err != nil {
 		return fmt.Errorf("error in transaction timestamp")
 	}
@@ -371,7 +370,7 @@ func (t *SupplyChain) updateProduct(ctx contractapi.TransactionContextInterface,
 	productBytes, err := ctx.GetStub().GetState(productID)
 
 	if err != nil {
-		return fmt.Errorf("failed to read product from world state: %s", err.Error())
+		return fmt.Errorf("failed to read product from world-state: %s", err.Error())
 	}
 
 	if productBytes == nil {
@@ -436,7 +435,7 @@ func (t *SupplyChain) toSupplier(ctx contractapi.TransactionContextInterface, pr
 	}
 
 	// Trnasaction Timestamp
-	txTimeAsPtr, errTx := t.GetTxTime(ctx)
+	txTimeAsPtr, errTx := t.GetTxTimestamp(ctx)
 	if errTx != nil {
 		return fmt.Errorf("error getting transaction timestamp")
 	}
@@ -486,7 +485,7 @@ func (t *SupplyChain) toTransporter(ctx contractapi.TransactionContextInterface,
 	}
 
 	// Trnasaction Timestamp
-	txTimeAsPtr, errTx := t.GetTxTime(ctx)
+	txTimeAsPtr, errTx := t.GetTxTimestamp(ctx)
 	if errTx != nil {
 		return fmt.Errorf("error getting transaction timeStamp")
 	}
@@ -527,7 +526,7 @@ func (t *SupplyChain) sellToCustomer(ctx contractapi.TransactionContextInterface
 	}
 
 	// Transaction Timestamp
-	txTimeAsPtr, errTx := t.GetTxTime(ctx)
+	txTimeAsPtr, errTx := t.GetTxTimestamp(ctx)
 	if errTx != nil {
 		return fmt.Errorf("error in timestamp")
 	}
